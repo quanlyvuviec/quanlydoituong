@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ứng dụng quản lý đối tượng</title>
+  <script src="./vendor/tailwind.min.js"></script>Viết bởi: Thanhbap
+  <script src="./vendor/xlsx.full.min.js"></script>
+  <script src="./vendor/flatpickr.min.js"></script>
+  <script src="./vendor/dexie.min.js"></script>
+  <link rel="stylesheet" href="./vendor/flatpickr.min.css">
+  <style>
+    .date-picker-wrapper {
+      position: relative;
+    }
+    .date-picker-wrapper input[type="text"] {
+      width: 100%;
+    }
+    #callDatePicker, #officerPicker {
+      display: none;
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 10px;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .form-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: red;
+    }
+    .form-input:disabled {
+      background-color: #f3f4f6;
+      cursor: not-allowed;
+    }
+    .summary-table {
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+    }
+    .summary-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .summary-table th, .summary-table td {
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .summary-table th {
+      background-color: #f9fafb;
+      font-weight: 600;
+    }
+    .summary-table tr:hover {
+      background-color: #f1f5f9;
+      cursor: pointer;
+    }
+    #notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #ef4444;
+      color: white;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #updateListModal, #changeUserModal, #createUserModal, #loginSection {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #ccc;
+      padding: 20px;
+      z-index: 2000;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    #loginSection {
+      display: block;
+    }
+    #updateListModal .list-section {
+      margin-bottom: 20px;
+      display: none;
+    }
+    #updateListModal ul {
+      list-style: none;
+      padding: 0;
+    }
+    #updateListModal li {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    #updateListModal input {
+      flex: 1;
+      margin-right: 10px;
+    }
+    .active-btn {
+      filter: brightness(0.8);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex min-h-screen">
+  <!-- Notification -->
+  <div id="notification"></div>
+  <!-- Login Section -->
+  <div id="loginSection">
+    <h3 class="text-lg font-bold mb-4">Đăng nhập</h3>
+    <input id="usernameInput" type="text" placeholder="Tên người dùng" class="border p-2 rounded w-full mb-2">
+    <input id="passwordInput" type="password" placeholder="Mật khẩu" class="border p-2 rounded w-full mb-2">
+    <button id="loginBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Đăng nhập</button>
+    <button id="createUserBtn" class="bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded w-full">Tạo User Mới</button>
+  </div>
+  <!-- Create User Modal -->
+  <div id="createUserModal">
+    <h3 class="text-lg font-bold mb-4">Tạo User Mới</h3>
+    <input id="newUsername" type="text" placeholder="Tên người dùng mới" class="border p-2 rounded w-full mb-2">
+    <input id="newPassword" type="password" placeholder="Mật khẩu mới" class="border p-2 rounded w-full mb-2">
+    <input id="confirmNewPassword" type="password" placeholder="Xác nhận mật khẩu mới" class="border p-2 rounded w-full mb-2">
+    <button id="createUserSubmitBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Tạo User</button>
+    <button id="createUserCloseBtn" class="bg-gray-500 hover:bg-gray-600 text-white py-1 px-2 rounded w-full">Đóng</button>
+  </div>
+  <!-- Sidebar -->
+  <div class="w-64 bg-gray-800 text-white h-screen p-4 fixed" id="sidebar" style="display: none;">
+    <h2 class="text-xl font-bold mb-4">Quản lý đối tượng</h2>
+    <button id="criminalBtn" class="systemBtn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Hệ hình sự</button>
+    <button id="drugBtn" class="systemBtn bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Hệ ma túy</button>
+    <button id="economicBtn" class="systemBtn bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Hệ kinh tế, môi trường</button>
+    <button id="deletedDataBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Dữ liệu đã xóa</button>
+    <button id="backupBtn" class="bg-amber-800 hover:bg-amber-900 text-white font-semibold py-2 px-4 rounded w-full mb-2">Sao lưu dữ liệu</button>
+    <button id="restoreBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Phục hồi dữ liệu</button>
+    <button id="updateListBtn" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Cập nhật danh sách</button>
+    <button id="changeUserBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Thay đổi User và Mật khẩu</button>
+    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded w-full mb-2">Thoát</button>
+  </div>
+  <!-- Main Content -->
+  <div class="flex-1 p-6 ml-64" id="mainContent" style="display: none;">
+    <!-- Summary Table (Home) -->
+    <div id="homeSection" class="w-full">
+      <h3 id="summaryTitle" class="text-lg font-semibold mb-2">Danh sách tóm tắt</h3>
+      <div id="filterSection" class="mb-4 flex items-center space-x-2">
+        <select id="filterType" class="border p-2 rounded">
+          <option value="fullName">Họ và tên</option>
+          <option value="cccd">Số CCCD</option>
+          <option value="dob">Năm sinh</option>
+          <option value="assignedOfficer">Cán bộ được phân công theo dõi</option>
+        </select>
+        <input id="filterInput" type="text" placeholder="Nhập giá trị lọc..." class="border p-2 rounded flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button id="filterBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded">Lọc</button>
+        <button id="clearFilterBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded">Xóa lọc</button>
+        <button id="exportSummaryBtn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded">Xuất dữ liệu</button>
+      </div>
+      <div class="summary-table">
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Họ và tên</th>
+              <th>Năm sinh</th>
+              <th>Hộ khẩu thường trú/ Nơi ở</th>
+              <th>Hành vi</th>
+              <th>Diện quản lý</th>
+              <th>Ngày gọi hỏi, răn đe</th>
+              <th>Thời điểm đưa vào</th>
+              <th>Cán bộ được phân công</th>
+              <th>Ghi chú</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Form, Search, and Export Sections -->
+    <div id="formWrapper" class="hidden">
+      <div id="searchSection" class="mb-4 flex items-center">
+        <input id="searchInput" type="text" placeholder="Tìm kiếm theo tên, năm sinh, CCCD, hộ khẩu..." class="border p-2 rounded w-3/4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button id="searchBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded ml-2">Tìm kiếm</button>
+      </div>
+      <div id="formSection" class="p-6 rounded-lg shadow-md">
+        <div class="flex items-start mb-4">
+          <div class="w-[113px] h-[151px] border-2 border-gray-300 flex items-center justify-center bg-gray-100 overflow-hidden" id="photoPlaceholder">
+            <img id="photoPreview" class="hidden object-contain w-full h-full" alt="Ảnh đối tượng">
+            <span id="photoText" class="text-gray-500 text-sm">Ảnh 3x4cm</span>
+          </div>
+          <div class="ml-4 flex flex-col">
+            <label for="photoInput" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded cursor-pointer mt-2">Chèn ảnh</label>
+            <button id="exportPhotoBtn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-1 px-2 rounded mt-2">Xuất ảnh</button>
+          </div>
+          <input id="photoInput" type="file" accept="image/*" class="hidden" disabled>
+        </div>
+        <form id="entityForm" class="grid grid-cols-2 gap-4">
+          <div class="col-span-1 flex items-center">
+            <div class="flex items-center">
+              <label class="block form-label mr-2">STT</label>
+              <input id="stt" type="text" readonly class="border p-2 rounded w-20 bg-gray-100 mr-2" value="1">
+              <button id="prevBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded mr-2">Quay lại</button>
+              <button id="nextBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded">Tiếp theo</button>
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Thời điểm đưa vào</label>
+            <div class="date-picker-wrapper">
+              <input id="entryDateText" type="text" class="border p-2 rounded w-full form-input" placeholder="dd/mm/yyyy">
+              <input id="entryDate" type="hidden" class="form-input">
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Họ và tên</label>
+            <input id="fullName" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Năm sinh</label>
+            <div class="date-picker-wrapper">
+              <input id="dobText" type="text" class="border p-2 rounded w-full form-input" placeholder="dd/mm/yyyy">
+              <input id="dob" type="hidden" class="form-input">
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Giới tính</label>
+            <select id="gender" class="border p-2 rounded w-full form-input" disabled>
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+            </select>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Thời điểm vắng mặt</label>
+            <div class="date-picker-wrapper">
+              <input id="absenceDateText" type="text" class="border p-2 rounded w-full form-input" placeholder="dd/mm/yyyy">
+              <input id="absenceDate" type="hidden" class="form-input">
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Nghề nghiệp</label>
+            <input id="occupation" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Hộ khẩu thường trú/ Nơi ở</label>
+            <input id="address" type="text" value="Phường Tân Bình, TP. Hồ Chí Minh" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Số CCCD/ Số định danh</label>
+            <input id="cccd" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Số điện thoại</label>
+            <input id="phone" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Tiền án, tiền sự</label>
+            <input id="criminalRecord" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Hành vi</label>
+            <input id="behavior" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Dấu hiệu nghi vấn</label>
+            <input id="suspicion" type="text" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Địa bàn nghi vấn hoạt động</label>
+            <input id="area" type="text" value="Liên phường" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Diện quản lý</label>
+            <select id="managementType" class="border p-2 rounded w-full form-input" disabled>
+              <!-- Options loaded dynamically -->
+            </select>
+            <input id="managementTypeCustom" type="text" class="border p-2 rounded w-full mt-2 form-input hidden" placeholder="Nhập diện quản lý khác" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Đối sách, xử lý</label>
+            <input id="measures" type="text" value="Gọi hỏi, răn đe, cảm hóa, giáo dục" class="border p-2 rounded w-full form-input" disabled>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Đơn vị quản lý</label>
+            <select id="managementUnit" class="border p-2 rounded w-full form-input" disabled>
+              <!-- Options loaded dynamically -->
+            </select>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Số lượt gọi hỏi, răn đe</label>
+            <input id="callCount" type="text" readonly class="border p-2 rounded w-full bg-gray-100" disabled>
+          </div>
+          <div class="col-span-1 relative">
+            <label class="block form-label">Ngày gọi hỏi, răn đe</label>
+            <input id="callDate" type="text" placeholder="dd/mm/yyyy, dd/mm/yyyy" class="border p-2 rounded w-full form-input" disabled>
+            <div id="callDatePicker" class="bg-white border p-2">
+              <input id="callDateSingle" type="text" class="border p-1 w-full" placeholder="dd/mm/yyyy">
+              <button id="addCallDate" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded mt-2 w-full">Thêm ngày</button>
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Lĩnh vực</label>
+            <select id="field" class="border p-2 rounded w-full form-input" disabled>
+              <!-- Options loaded dynamically -->
+            </select>
+          </div>
+          <div class="col-span-1 relative">
+            <label class="block form-label">Cán bộ được phân công theo dõi</label>
+            <input id="assignedOfficerDisplay" type="text" class="border p-2 rounded w-full form-input" readonly>
+            <div id="officerPicker" class="hidden bg-white border p-2 w-full">
+              <select id="assignedOfficer" size="4" class="border p-1 w-full">
+                <!-- Options loaded dynamically -->
+              </select>
+              <button id="addOfficer" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded mt-2 w-full">Thêm</button>
+            </div>
+          </div>
+          <div class="col-span-1">
+            <label class="block form-label">Chỉ huy được phân công theo dõi</label>
+            <select id="supervisor" class="border p-2 rounded w-full form-input" disabled>
+              <!-- Options loaded dynamically -->
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label class="block form-label">Ghi chú</label>
+            <textarea id="note" class="border p-2 rounded w-full form-input" rows="4" disabled></textarea>
+          </div>
+        </form>
+        <div class="mt-4 flex space-x-2">
+          <button id="closeFormBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded">Đóng</button>
+          <button id="editBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded">Chỉnh sửa</button>
+          <button id="addBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded">Thêm</button>
+          <button id="saveBtn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded transform transition-transform active:scale-95" disabled>Lưu</button>
+          <button id="deleteBtn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded">Xóa</button>
+          <button id="permanentDeleteBtn" class="bg-red-700 hover:bg-red-800 text-white font-semibold py-2 px-4 rounded hidden">Xóa vĩnh viễn</button>
+        </div>
+      </div>
+      <div id="exportSection" class="mt-4">
+        <label class="font-semibold">Xuất báo cáo từ ngày:</label>
+        <div class="date-picker-wrapper inline-block">
+          <input id="exportStartDateText" type="text" class="border p-2 rounded form-input" placeholder="dd/mm/yyyy">
+          <input id="exportStartDate" type="hidden" class="form-input">
+        </div>
+        <label class="font-semibold ml-2">đến ngày:</label>
+        <div class="date-picker-wrapper inline-block">
+          <input id="exportEndDateText" type="text" class="border p-2 rounded form-input" placeholder="dd/mm/yyyy">
+          <input id="exportEndDate" type="hidden" class="form-input">
+        </div>
+        <button id="exportBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded ml-2">Xuất báo cáo</button>
+      </div>
+    </div>
+    <!-- Modal for Updating Lists -->
+    <div id="updateListModal">
+      <h3 class="text-lg font-bold mb-4">Cập nhật các danh sách</h3>
+      <select id="listSelector" class="border p-2 rounded w-full mb-4">
+        <option value="">Chọn danh sách để cập nhật</option>
+        <option value="officer">Cán bộ được phân công</option>
+        <option value="field">Lĩnh vực</option>
+        <option value="supervisor">Chỉ huy được phân công</option>
+        <option value="managementType">Diện quản lý</option>
+        <option value="managementUnit">Đơn vị quản lý</option>
+      </select>
+      <!-- Officer List Section -->
+      <div id="officerSection" class="list-section">
+        <h4>Cán bộ được phân công</h4>
+        <ul id="officerListItems"></ul>
+        <input id="newOfficerInput" type="text" placeholder="Nhập tên cán bộ mới" class="border p-2 w-full mb-2">
+        <button id="addOfficerNewBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thêm mới</button>
+      </div>
+      <!-- Field List Section -->
+      <div id="fieldSection" class="list-section">
+        <h4>Lĩnh vực</h4>
+        <ul id="fieldListItems"></ul>
+        <input id="newFieldInput" type="text" placeholder="Nhập lĩnh vực mới" class="border p-2 w-full mb-2">
+        <button id="addFieldNewBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thêm mới</button>
+      </div>
+      <!-- Supervisor List Section -->
+      <div id="supervisorSection" class="list-section">
+        <h4>Chỉ huy được phân công</h4>
+        <ul id="supervisorListItems"></ul>
+        <input id="newSupervisorInput" type="text" placeholder="Nhập chỉ huy mới" class="border p-2 w-full mb-2">
+        <button id="addSupervisorNewBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thêm mới</button>
+      </div>
+      <!-- Management Type List Section -->
+      <div id="managementTypeSection" class="list-section">
+        <h4>Diện quản lý</h4>
+        <ul id="managementTypeListItems"></ul>
+        <input id="newManagementTypeInput" type="text" placeholder="Nhập diện quản lý mới" class="border p-2 w-full mb-2">
+        <button id="addManagementTypeNewBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thêm mới</button>
+      </div>
+      <!-- Management Unit List Section -->
+      <div id="managementUnitSection" class="list-section">
+        <h4>Đơn vị quản lý</h4>
+        <ul id="managementUnitListItems"></ul>
+        <input id="newManagementUnitInput" type="text" placeholder="Nhập đơn vị quản lý mới" class="border p-2 w-full mb-2">
+        <button id="addManagementUnitNewBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thêm mới</button>
+      </div>
+      <button id="saveListBtn" class="bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded w-full mb-2">Lưu tất cả danh sách</button>
+      <button id="closeModalBtn" class="bg-gray-500 hover:bg-gray-600 text-white py-1 px-2 rounded w-full">Đóng</button>
+    </div>
+    <!-- Modal for Changing User and Password -->
+    <div id="changeUserModal">
+      <h3 class="text-lg font-bold mb-4">Thay đổi User và Mật khẩu</h3>
+      <input id="oldUsername" type="text" placeholder="Tên người dùng hiện tại" class="border p-2 rounded w-full mb-2">
+      <input id="oldPassword" type="password" placeholder="Mật khẩu hiện tại" class="border p-2 rounded w-full mb-2">
+      <input id="newUsername" type="text" placeholder="Tên người dùng mới" class="border p-2 rounded w-full mb-2">
+      <input id="newPassword" type="password" placeholder="Mật khẩu mới" class="border p-2 rounded w-full mb-2">
+      <input id="confirmNewPassword" type="password" placeholder="Xác nhận mật khẩu mới" class="border p-2 rounded w-full mb-2">
+      <button id="changeUserSubmitBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded w-full mb-2">Thay đổi</button>
+      <button id="changeUserCloseBtn" class="bg-gray-500 hover:bg-gray-600 text-white py-1 px-2 rounded w-full">Đóng</button>
+    </div>
+    <!-- Hidden File Input for Restore -->
+    <input id="restoreFileInput" type="file" accept=".json" style="display: none;">
+  </div>
+  <script>
+    // Initialize IndexedDB with Dexie.js
+    const db = new Dexie('EntityManagementDB');
+    db.version(2).stores({
+      entitiesCriminal: '++stt',
+      entitiesDrug: '++stt',
+      entitiesEconomic: '++stt',
+      deletedEntitiesCriminal: '++stt',
+      deletedEntitiesDrug: '++stt',
+      deletedEntitiesEconomic: '++stt',
+      officerList: '++id,value',
+      fieldList: '++id,value',
+      supervisorList: '++id,value',
+      managementTypeList: '++id,value',
+      managementUnitList: '++id,value',
+      users: '++id, &username, password'
+    });
+
+    // Lists configuration
+    const listsConfig = {
+      officer: {
+        key: 'officerList',
+        defaultList: ["Trần Minh Quân (CSKV)", "Ngô Minh Thành (PCTP)", "Nguyễn Minh Quân (CSKV)", "Hà Gia Kính (PCTP)"],
+        selectId: 'assignedOfficer',
+        listItemsId: 'officerListItems',
+        newInputId: 'newOfficerInput',
+        sectionId: 'officerSection',
+        addBtnId: 'addOfficerNewBtn'
+      },
+      field: {
+        key: 'fieldList',
+        defaultList: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        selectId: 'field',
+        listItemsId: 'fieldListItems',
+        newInputId: 'newFieldInput',
+        sectionId: 'fieldSection',
+        addBtnId: 'addFieldNewBtn'
+      },
+      supervisor: {
+        key: 'supervisorList',
+        defaultList: ["Phạm Văn Trung (Phó CAP)"],
+        selectId: 'supervisor',
+        listItemsId: 'supervisorListItems',
+        newInputId: 'newSupervisorInput',
+        sectionId: 'supervisorSection',
+        addBtnId: 'addSupervisorNewBtn'
+      },
+      managementType: {
+        key: 'managementTypeList',
+        defaultList: ["Tù tha", "ĐTCB", "Sưu tra - Loại - Hệ", "Án treo", "Diện 105", "Methadone", "Quản lý sau cai", "Quản lý nghiện", "Khác"],
+        selectId: 'managementType',
+        listItemsId: 'managementTypeListItems',
+        newInputId: 'newManagementTypeInput',
+        sectionId: 'managementTypeSection',
+        addBtnId: 'addManagementTypeNewBtn'
+      },
+      managementUnit: {
+        key: 'managementUnitList',
+        defaultList: ["CA Phường Tân Bình"],
+        selectId: 'managementUnit',
+        listItemsId: 'managementUnitListItems',
+        newInputId: 'newManagementUnitInput',
+        sectionId: 'managementUnitSection',
+        addBtnId: 'addManagementUnitNewBtn'
+      }
+    };
+
+    // Initialize data
+    let entities = [];
+    let deletedEntities = [];
+    let currentSystem = 'criminal';
+    let currentIndex = 0;
+    let isEditing = false;
+    let selectedOfficers = [];
+    let isFormOpen = false;
+    let showDeleted = false;
+    let filteredEntities = [];
+    let lists = {};
+
+    // Migrate data from localStorage to IndexedDB (run once)
+    async function migrateData() {
+      const systems = ['Criminal', 'Drug', 'Economic'];
+      for (const system of systems) {
+        const entitiesKey = `entities${system}`;
+        const deletedEntitiesKey = `deletedEntities${system}`;
+        const entitiesData = JSON.parse(localStorage.getItem(entitiesKey)) || [];
+        const deletedEntitiesData = JSON.parse(localStorage.getItem(deletedEntitiesKey)) || [];
+        await db[`entities${system}`].bulkPut(entitiesData);
+        await db[`deletedEntities${system}`].bulkPut(deletedEntitiesData);
+        localStorage.removeItem(entitiesKey);
+        localStorage.removeItem(deletedEntitiesKey);
+      }
+      for (const key of Object.keys(listsConfig)) {
+        const listData = JSON.parse(localStorage.getItem(listsConfig[key].key)) || listsConfig[key].defaultList;
+        await db[listsConfig[key].key].bulkPut(listData.map((value, index) => ({ id: index + 1, value })));
+        localStorage.removeItem(listsConfig[key].key);
+      }
+    }
+
+    // Load initial data
+    async function loadInitialData() {
+      entities = await db.entitiesCriminal.toArray();
+      deletedEntities = await db.deletedEntitiesCriminal.toArray();
+      filteredEntities = [...entities];
+      for (const key of Object.keys(listsConfig)) {
+        lists[key] = (await db[listsConfig[key].key].toArray()).map(item => item.value);
+        if (!lists[key].length) {
+          lists[key] = listsConfig[key].defaultList;
+          await db[listsConfig[key].key].bulkPut(lists[key].map((value, index) => ({ id: index + 1, value })));
+        }
+        loadListIntoSelect(listsConfig[key].selectId, lists[key]);
+      }
+    }
+
+    // Custom notification function
+    function showNotification(message) {
+      const notification = document.getElementById('notification');
+      notification.textContent = message;
+      notification.style.display = 'block';
+      setTimeout(() => {
+        notification.style.display = 'none';
+      }, 3000);
+    }
+
+    // Convert date format between dd/mm/yyyy and yyyy-mm-dd
+    function toInternalDateFormat(dateStr) {
+      if (!dateStr) return '';
+      if (dateStr.includes(',')) {
+        return dateStr.split(',').map(date => {
+          const [d, m, y] = date.trim().split('/');
+          return y && m && d ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : date;
+        }).join(',');
+      }
+      const [d, m, y] = dateStr.split('/');
+      return y && m && d ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : dateStr;
+    }
+
+    function toDisplayDateFormat(dateStr) {
+      if (!dateStr) return '';
+      if (dateStr.includes(',')) {
+        return dateStr.split(',').map(date => {
+          const [y, m, d] = date.trim().split('-');
+          return y && m && d ? `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}` : date;
+        }).join(', ');
+      }
+      const [y, m, d] = dateStr.split('-');
+      return y && m && d ? `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}` : dateStr;
+    }
+
+    // Validate date
+    function isValidDate(dateStr) {
+      if (!dateStr) return false;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return false;
+      const date = new Date(y, m - 1, d);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+    }
+
+    // Setup date inputs with Flatpickr
+    function setupDateInput(dateInputId, textInputId) {
+      const textInput = document.getElementById(textInputId);
+      const dateInput = document.getElementById(dateInputId);
+      flatpickr(textInput, {
+        dateFormat: 'd/m/Y',
+        enableTime: false,
+        onChange: (selectedDates, dateStr) => {
+          textInput.value = dateStr;
+          textInput.dataset.display = dateStr;
+          if (selectedDates.length > 0) {
+            const date = selectedDates[0];
+            dateInput.value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+          } else {
+            dateInput.value = '';
+          }
+        },
+        allowInput: false,
+        disableMobile: true,
+        onOpen: function(selectedDates, dateStr, instance) {
+          if (!isEditing && !dateInputId.startsWith('export')) {
+            instance.close();
+            showNotification('Vui lòng nhấn "Chỉnh sửa" hoặc "Thêm" để chọn ngày.');
+          }
+        }
+      });
+    }
+
+    // Apply date formatting to date inputs
+    [
+      { dateId: 'dob', textId: 'dobText' },
+      { dateId: 'absenceDate', textId: 'absenceDateText' },
+      { dateId: 'entryDate', textId: 'entryDateText' },
+      { dateId: 'exportStartDate', textId: 'exportStartDateText' },
+      { dateId: 'exportEndDate', textId: 'exportEndDateText' }
+    ].forEach(({ dateId, textId }) => {
+      setupDateInput(dateId, textId);
+    });
+
+    // Handle multiple dates for callDate
+    const callDateInput = document.getElementById('callDate');
+    const callDatePicker = document.getElementById('callDatePicker');
+    const callDateSingle = document.getElementById('callDateSingle');
+    const addCallDateBtn = document.getElementById('addCallDate');
+
+    flatpickr(callDateSingle, {
+      dateFormat: 'd/m/Y',
+      enableTime: false,
+      allowInput: false,
+      disableMobile: true
+    });
+
+    callDateInput.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (isEditing) {
+        callDatePicker.style.display = 'block';
+        callDatePicker.style.top = `${callDateInput.offsetTop + callDateInput.offsetHeight}px`;
+        callDatePicker.style.left = `${callDateInput.offsetLeft}px`;
+      }
+    });
+
+    callDateSingle.addEventListener('change', (e) => {
+      const formattedDate = callDateSingle.value;
+      if (formattedDate) {
+        const currentDates = callDateInput.value ? callDateInput.value.split(', ') : [];
+        if (!currentDates.includes(formattedDate)) {
+          currentDates.push(formattedDate);
+          callDateInput.value = currentDates.join(', ');
+        }
+        callDateSingle.value = '';
+        callDatePicker.style.display = 'none';
+      }
+    });
+
+    addCallDateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const formattedDate = callDateSingle.value;
+      if (formattedDate) {
+        const currentDates = callDateInput.value ? callDateInput.value.split(', ') : [];
+        if (!currentDates.includes(formattedDate)) {
+          currentDates.push(formattedDate);
+          callDateInput.value = currentDates.join(', ');
+        }
+        callDateSingle.value = '';
+        callDatePicker.style.display = 'none';
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!callDatePicker.contains(e.target) && e.target !== callDateInput) {
+        callDatePicker.style.display = 'none';
+      }
+      if (!officerPicker.contains(e.target) && e.target !== assignedOfficerDisplay) {
+        officerPicker.style.display = 'none';
+      }
+    });
+
+    // Handle officer selection
+    const assignedOfficerDisplay = document.getElementById('assignedOfficerDisplay');
+    const officerPicker = document.getElementById('officerPicker');
+    const assignedOfficerSelect = document.getElementById('assignedOfficer');
+    const addOfficerBtn = document.getElementById('addOfficer');
+
+    assignedOfficerDisplay.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (isEditing) {
+        officerPicker.style.display = 'block';
+        officerPicker.style.top = `${assignedOfficerDisplay.offsetTop + assignedOfficerDisplay.offsetHeight}px`;
+        officerPicker.style.left = `${assignedOfficerDisplay.offsetLeft}px`;
+      }
+    });
+
+    addOfficerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const selectedOption = assignedOfficerSelect.value;
+      if (selectedOption && selectedOfficers.length < 2 && !selectedOfficers.includes(selectedOption)) {
+        selectedOfficers.push(selectedOption);
+        assignedOfficerDisplay.value = selectedOfficers.join(', ');
+      }
+      officerPicker.style.display = 'none';
+    });
+
+    // Load list into select
+    function loadListIntoSelect(selectId, listData) {
+      const select = document.getElementById(selectId);
+      select.innerHTML = '';
+      listData.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        select.appendChild(option);
+      });
+    }
+
+    // Render a single list in modal
+    function renderList(key) {
+      const config = listsConfig[key];
+      const listItems = document.getElementById(config.listItemsId);
+      listItems.innerHTML = '';
+      lists[key].forEach((item, index) => {
+        const li = document.createElement('li');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = item;
+        input.addEventListener('change', (e) => {
+          lists[key][index] = e.target.value.trim();
+        });
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Xóa';
+        deleteBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded');
+        deleteBtn.addEventListener('click', () => {
+          lists[key].splice(index, 1);
+          renderList(key);
+        });
+        li.appendChild(input);
+        li.appendChild(deleteBtn);
+        listItems.appendChild(li);
+      });
+    }
+
+    // Add to list
+    function addToList(key, value) {
+      value = value.trim();
+      if (value && !lists[key].includes(value)) {
+        lists[key].push(value);
+        document.getElementById(listsConfig[key].newInputId).value = '';
+        renderList(key);
+      } else {
+        showNotification('Vui lòng nhập giá trị hợp lệ và không trùng lặp.');
+      }
+    }
+
+    // Save all lists to IndexedDB
+    async function saveAllLists() {
+      for (const key of Object.keys(listsConfig)) {
+        await db[listsConfig[key].key].clear();
+        await db[listsConfig[key].key].bulkPut(lists[key].map((value, index) => ({ id: index + 1, value })));
+      }
+      showNotification('Tất cả danh sách đã được cập nhật!');
+      Object.keys(listsConfig).forEach(key => {
+        loadListIntoSelect(listsConfig[key].selectId, lists[key]);
+      });
+    }
+
+    // Modal events
+    const updateListModal = document.getElementById('updateListModal');
+    const updateListBtn = document.getElementById('updateListBtn');
+    const listSelector = document.getElementById('listSelector');
+    const saveListBtn = document.getElementById('saveListBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+
+    updateListBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      listSelector.value = '';
+      Object.keys(listsConfig).forEach(key => {
+        document.getElementById(listsConfig[key].sectionId).style.display = 'none';
+      });
+      updateListModal.style.display = 'block';
+    });
+
+    listSelector.addEventListener('change', (e) => {
+      const selectedKey = e.target.value;
+      Object.keys(listsConfig).forEach(key => {
+        document.getElementById(listsConfig[key].sectionId).style.display = (key === selectedKey) ? 'block' : 'none';
+      });
+      if (selectedKey) {
+        renderList(selectedKey);
+      }
+    });
+
+    saveListBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await saveAllLists();
+      updateListModal.style.display = 'none';
+    });
+
+    closeModalBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      updateListModal.style.display = 'none';
+    });
+
+    // Add event listeners for add buttons
+    Object.keys(listsConfig).forEach(key => {
+      const addBtn = document.getElementById(listsConfig[key].addBtnId);
+      if (addBtn) {
+        addBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const value = document.getElementById(listsConfig[key].newInputId).value;
+          addToList(key, value);
+        });
+      }
+    });
+
+    // Handle sidebar button active state
+    const sidebarButtons = document.querySelectorAll('.systemBtn, #deletedDataBtn, #backupBtn, #restoreBtn, #changeUserBtn, #logoutBtn');
+    sidebarButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        sidebarButtons.forEach(b => b.classList.remove('active-btn'));
+        btn.classList.add('active-btn');
+      });
+    });
+
+    // Backup data
+    document.getElementById('backupBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const backupData = {};
+      const stores = ['entitiesCriminal', 'entitiesDrug', 'entitiesEconomic', 'deletedEntitiesCriminal', 'deletedEntitiesDrug', 'deletedEntitiesEconomic', 'officerList', 'fieldList', 'supervisorList', 'managementTypeList', 'managementUnitList', 'users'];
+      for (const store of stores) {
+        backupData[store] = await db[store].toArray();
+      }
+      const jsonData = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'backup_data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showNotification('Sao lưu dữ liệu thành công!');
+    });
+
+    // Restore data
+    document.getElementById('restoreBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const restoreFileInput = document.getElementById('restoreFileInput');
+      restoreFileInput.click();
+    });
+
+    document.getElementById('restoreFileInput').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (file && confirm('Bạn có chắc muốn phục hồi dữ liệu? Dữ liệu hiện tại sẽ bị thay thế.')) {
+        try {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const backupData = JSON.parse(e.target.result);
+            const stores = Object.keys(backupData);
+            for (const store of stores) {
+              await db[store].clear();
+              await db[store].bulkPut(backupData[store]);
+            }
+            await loadInitialData();
+            await updateSummaryTable();
+            await checkCreateUserAvailability();
+            showNotification('Phục hồi dữ liệu thành công!');
+          };
+          reader.readAsText(file);
+        } catch (error) {
+          showNotification('Lỗi phục hồi dữ liệu: File không hợp lệ.');
+          console.error(error);
+        }
+      }
+      event.target.value = ''; // Reset input
+    });
+
+    // Update summary table
+    async function updateSummaryTable(filtered = showDeleted ? deletedEntities : entities) {
+      const tbody = document.getElementById('summaryTableBody');
+      const title = document.getElementById('summaryTitle');
+      title.textContent = showDeleted ? `Danh sách đối tượng đã xóa - ${currentSystem === 'criminal' ? 'Hệ hình sự' : currentSystem === 'drug' ? 'Hệ ma túy' : 'Hệ kinh tế, môi trường'}` : `Danh sách tóm tắt - ${currentSystem === 'criminal' ? 'Hệ hình sự' : currentSystem === 'drug' ? 'Hệ ma túy' : 'Hệ kinh tế, môi trường'}`;
+      tbody.innerHTML = '';
+      filtered.forEach((entity, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${entity.stt}</td>
+          <td>${entity.fullName || ''}</td>
+          <td>${toDisplayDateFormat(entity.dob) || ''}</td>
+          <td>${entity.address || ''}</td>
+          <td>${entity.behavior || ''}</td>
+          <td>${entity.managementType || ''}</td>
+          <td>${toDisplayDateFormat(entity.callDate) || ''}</td>
+          <td>${toDisplayDateFormat(entity.entryDate) || ''}</td>
+          <td>${entity.assignedOfficer ? entity.assignedOfficer.join(', ') : ''}</td>
+          <td>${entity.note || ''}</td>
+          <td><button class="viewBtn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded" data-index="${index}">Xem</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+      document.querySelectorAll('.viewBtn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const index = parseInt(e.target.dataset.index);
+          currentIndex = index;
+          await loadEntity(currentIndex);
+          isFormOpen = true;
+          document.getElementById('homeSection').classList.add('hidden');
+          document.getElementById('formWrapper').classList.remove('hidden');
+          toggleFormEditable(false);
+        });
+      });
+    }
+
+    // Enable/disable form fields and toggle buttons based on showDeleted
+    function toggleFormEditable(editable) {
+      isEditing = editable;
+      const inputs = document.querySelectorAll('#entityForm input, #entityForm select, #entityForm textarea, #photoInput');
+      inputs.forEach(input => {
+        if (input.id !== 'stt' && input.id !== 'callCount' && !input.id.endsWith('Text')) {
+          input.disabled = !editable || showDeleted; // Disable inputs if showDeleted is true
+        }
+      });
+      document.getElementById('assignedOfficerDisplay').disabled = !editable || showDeleted;
+      document.getElementById('callDate').disabled = !editable || showDeleted;
+      document.getElementById('saveBtn').disabled = !editable || showDeleted;
+      document.getElementById('editBtn').style.display = showDeleted ? 'none' : 'block';
+      document.getElementById('addBtn').style.display = showDeleted ? 'none' : 'block';
+      document.getElementById('deleteBtn').style.display = showDeleted ? 'none' : 'block';
+      document.getElementById('permanentDeleteBtn').style.display = showDeleted ? 'block' : 'none';
+      document.getElementById('editBtn').textContent = editable ? 'Hủy chỉnh sửa' : 'Chỉnh sửa';
+      document.getElementById('saveBtn').style.display = showDeleted ? 'none' : 'block';
+    }
+
+    // Switch system
+    async function switchSystem(system, deleted = false) {
+      currentSystem = system;
+      showDeleted = deleted;
+      let entitiesStore = `entities${system.charAt(0).toUpperCase() + system.slice(1)}`;
+      let deletedStore = `deletedEntities${system.charAt(0).toUpperCase() + system.slice(1)}`;
+      entities = await db[entitiesStore].toArray();
+      deletedEntities = await db[deletedStore].toArray();
+      if (system === 'criminal') {
+        document.getElementById('formSection').style.backgroundColor = '#e0f2fe';
+      } else if (system === 'drug') {
+        document.getElementById('formSection').style.backgroundColor = '#ffedd5';
+      } else if (system === 'economic') {
+        document.getElementById('formSection').style.backgroundColor = '#dcfce7';
+      }
+      filteredEntities = [...(showDeleted ? deletedEntities : entities)];
+      currentIndex = 0;
+      await updateSummaryTable(filteredEntities);
+      if (isFormOpen) {
+        await loadEntity(currentIndex);
+        toggleFormEditable(false);
+      }
+    }
+
+    // Handle system buttons
+    document.querySelectorAll('.systemBtn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const system = e.target.id.replace('Btn', '');
+        await switchSystem(system, false);
+        if (isFormOpen) {
+          isFormOpen = false;
+          document.getElementById('homeSection').classList.remove('hidden');
+          document.getElementById('formWrapper').classList.add('hidden');
+          resetForm();
+        } else {
+          isFormOpen = true;
+          document.getElementById('homeSection').classList.add('hidden');
+          document.getElementById('formWrapper').classList.remove('hidden');
+          await loadEntity(currentIndex);
+          toggleFormEditable(false);
+        }
+      });
+    });
+
+    // Handle deleted data button
+    document.getElementById('deletedDataBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await switchSystem(currentSystem, true);
+      document.getElementById('homeSection').classList.remove('hidden');
+      document.getElementById('formWrapper').classList.add('hidden');
+      resetForm();
+      isFormOpen = false;
+    });
+
+    // Close form button
+    document.getElementById('closeFormBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      isFormOpen = false;
+      document.getElementById('homeSection').classList.remove('hidden');
+      document.getElementById('formWrapper').classList.add('hidden');
+      resetForm();
+    });
+
+    // Edit button
+    document.getElementById('editBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!showDeleted) {
+        toggleFormEditable(!isEditing);
+        if (!isEditing) {
+          selectedOfficers = entities[currentIndex] ? entities[currentIndex].assignedOfficer.slice(0, 2) : [];
+          document.getElementById('assignedOfficerDisplay').value = selectedOfficers.join(', ');
+        }
+      }
+    });
+
+    // Add new entity
+    document.getElementById('addBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!showDeleted) {
+        resetForm();
+        currentIndex = entities.length;
+        document.getElementById('stt').value = currentIndex + 1;
+        toggleFormEditable(true);
+      }
+    });
+
+    // Save entity
+    document.getElementById('saveBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (showDeleted) return; // Prevent saving in deleted view
+      const callDates = document.getElementById('callDate').value;
+      const callCount = callDates ? callDates.split(',').filter(date => date.trim()).length : 0;
+      const entity = {
+        entryDate: toInternalDateFormat(document.getElementById('entryDateText').value),
+        fullName: document.getElementById('fullName').value,
+        dob: toInternalDateFormat(document.getElementById('dobText').value),
+        gender: document.getElementById('gender').value,
+        absenceDate: toInternalDateFormat(document.getElementById('absenceDateText').value),
+        occupation: document.getElementById('occupation').value,
+        address: document.getElementById('address').value,
+        cccd: document.getElementById('cccd').value,
+        phone: document.getElementById('phone').value,
+        criminalRecord: document.getElementById('criminalRecord').value,
+        behavior: document.getElementById('behavior').value,
+        suspicion: document.getElementById('suspicion').value,
+        area: document.getElementById('area').value,
+        managementType: document.getElementById('managementType').value === 'Khác' ? document.getElementById('managementTypeCustom').value : document.getElementById('managementType').value,
+        measures: document.getElementById('measures').value,
+        managementUnit: document.getElementById('managementUnit').value,
+        callCount: callCount,
+        callDate: toInternalDateFormat(callDates),
+        field: document.getElementById('field').value,
+        assignedOfficer: selectedOfficers,
+        supervisor: document.getElementById('supervisor').value,
+        note: document.getElementById('note').value,
+        photo: document.getElementById('photoPreview').src || ''
+      };
+      if (!entity.fullName || !entity.dob || !entity.cccd) {
+        showNotification('Vui lòng nhập đầy đủ Họ tên, Năm sinh và Số CCCD.');
+        return;
+      }
+      const entitiesStore = `entities${currentSystem.charAt(0).toUpperCase() + currentSystem.slice(1)}`;
+      if (entities[currentIndex]) {
+        entity.stt = entities[currentIndex].stt;
+        await db[entitiesStore].put(entity);
+      } else {
+        entity.stt = entities.length + 1;
+        await db[entitiesStore].add(entity);
+      }
+      entities = await db[entitiesStore].toArray();
+      document.getElementById('callCount').value = entity.callCount;
+      toggleFormEditable(false);
+      filteredEntities = [...entities];
+      await updateSummaryTable(filteredEntities);
+      showNotification('Lưu thành công!');
+    });
+
+    // Delete entity (move to deleted)
+    document.getElementById('deleteBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (entities[currentIndex] && !showDeleted) {
+        if (confirm('Bạn có chắc muốn xóa đối tượng này?')) {
+          const entitiesStore = `entities${currentSystem.charAt(0).toUpperCase() + currentSystem.slice(1)}`;
+          const deletedStore = `deletedEntities${currentSystem.charAt(0).toUpperCase() + currentSystem.slice(1)}`;
+          let deletedEntity = { ...entities[currentIndex] };
+          delete deletedEntity.stt; // Remove stt to allow auto-increment in deleted store
+          await db[deletedStore].add(deletedEntity);
+          // Reindex deletedEntities
+          deletedEntities = await db[deletedStore].toArray();
+          await db[deletedStore].clear();
+          const reindexedDeleted = deletedEntities.map((entity, index) => ({ ...entity, stt: index + 1 }));
+          await db[deletedStore].bulkAdd(reindexedDeleted);
+          deletedEntities = reindexedDeleted;
+
+          await db[entitiesStore].delete(entities[currentIndex].stt);
+          entities = await db[entitiesStore].toArray();
+          // Reindex entities
+          await db[entitiesStore].clear();
+          const reindexedEntities = entities.map((entity, index) => ({ ...entity, stt: index + 1 }));
+          await db[entitiesStore].bulkAdd(reindexedEntities);
+          entities = reindexedEntities;
+          if (entities.length === 0) {
+            resetForm();
+          } else {
+            currentIndex = Math.min(currentIndex, entities.length - 1);
+            await loadEntity(currentIndex);
+          }
+          toggleFormEditable(false);
+          filteredEntities = [...entities];
+          await updateSummaryTable(filteredEntities);
+          showNotification('Xóa thành công!');
+        }
+      } else {
+        resetForm();
+      }
+    });
+
+    // Permanent delete entity
+    document.getElementById('permanentDeleteBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (deletedEntities[currentIndex] && showDeleted) {
+        if (confirm('Bạn có chắc muốn xóa vĩnh viễn đối tượng này? Hành động này không thể khôi phục.')) {
+          const deletedStore = `deletedEntities${currentSystem.charAt(0).toUpperCase() + currentSystem.slice(1)}`;
+          await db[deletedStore].delete(deletedEntities[currentIndex].stt);
+          deletedEntities = await db[deletedStore].toArray();
+          // Reindex deletedEntities
+          await db[deletedStore].clear();
+          const reindexedDeleted = deletedEntities.map((entity, index) => ({ ...entity, stt: index + 1 }));
+          await db[deletedStore].bulkAdd(reindexedDeleted);
+          deletedEntities = reindexedDeleted;
+          if (deletedEntities.length === 0) {
+            resetForm();
+          } else {
+            currentIndex = Math.min(currentIndex, deletedEntities.length - 1);
+            await loadEntity(currentIndex);
+          }
+          toggleFormEditable(false);
+          filteredEntities = [...deletedEntities];
+          await updateSummaryTable(filteredEntities);
+          showNotification('Xóa vĩnh viễn thành công!');
+        }
+      }
+    });
+
+    // Navigate to previous entity
+    document.getElementById('prevBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (currentIndex > 0) {
+        currentIndex--;
+        await loadEntity(currentIndex);
+        toggleFormEditable(false);
+      }
+    });
+
+    // Navigate to next entity
+    document.getElementById('nextBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (currentIndex < (showDeleted ? deletedEntities.length : entities.length) - 1) {
+        currentIndex++;
+        await loadEntity(currentIndex);
+        toggleFormEditable(false);
+      } else if (!showDeleted) {
+        resetForm();
+        currentIndex = entities.length;
+        document.getElementById('stt').value = currentIndex + 1;
+        toggleFormEditable(true);
+      }
+    });
+
+    // Search functionality
+    document.getElementById('searchBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const targetEntities = showDeleted ? deletedEntities : entities;
+      const result = targetEntities.findIndex(entity =>
+        entity.fullName.toLowerCase().includes(query) ||
+        toDisplayDateFormat(entity.dob).includes(query) ||
+        entity.cccd.includes(query) ||
+        entity.address.toLowerCase().includes(query)
+      );
+      if (result !== -1) {
+        currentIndex = result;
+        await loadEntity(currentIndex);
+        isFormOpen = true;
+        document.getElementById('homeSection').classList.add('hidden');
+        document.getElementById('formWrapper').classList.remove('hidden');
+        toggleFormEditable(false);
+      } else {
+        showNotification('Không tìm thấy đối tượng phù hợp.');
+      }
+    });
+
+    // Filter functionality
+    document.getElementById('filterBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const filterType = document.getElementById('filterType').value;
+      const filterValue = document.getElementById('filterInput').value.toLowerCase();
+      const targetEntities = showDeleted ? deletedEntities : entities;
+      filteredEntities = targetEntities.filter(entity => {
+        if (filterType === 'assignedOfficer') {
+          return entity.assignedOfficer && entity.assignedOfficer.join(', ').toLowerCase().includes(filterValue);
+        } else if (filterType === 'fullName') {
+          return entity.fullName.toLowerCase().includes(filterValue);
+        } else if (filterType === 'cccd') {
+          return entity.cccd.toLowerCase().includes(filterValue);
+        } else if (filterType === 'dob') {
+          return toDisplayDateFormat(entity.dob).includes(filterValue);
+        }
+        return true;
+      });
+      await updateSummaryTable(filteredEntities);
+    });
+
+    // Clear filter
+    document.getElementById('clearFilterBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      document.getElementById('filterInput').value = '';
+      filteredEntities = [...(showDeleted ? deletedEntities : entities)];
+      await updateSummaryTable(filteredEntities);
+    });
+
+    // Export summary table to Excel
+    document.getElementById('exportSummaryBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const dataRows = filteredEntities.map(entity => ({
+        STT: entity.stt,
+        'Họ và tên': entity.fullName || '',
+        'Năm sinh': toDisplayDateFormat(entity.dob) || '',
+        'Hộ khẩu thường trú/ Nơi ở': entity.address || '',
+        'Hành vi': entity.behavior || '',
+        'Diện quản lý': entity.managementType || '',
+        'Ngày gọi hỏi, răn đe': toDisplayDateFormat(entity.callDate) || '',
+        'Thời điểm đưa vào': toDisplayDateFormat(entity.entryDate) || '',
+        'Cán bộ được phân công': entity.assignedOfficer ? entity.assignedOfficer.join(', ') : '',
+        'Ghi chú': entity.note || ''
+      }));
+      const worksheet = XLSX.utils.json_to_sheet(dataRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, showDeleted ? 'Danh sách đã xóa' : 'Danh sách tóm tắt');
+      XLSX.writeFile(workbook, showDeleted ? 'DanhSachDaXoa.xlsx' : 'DanhSachTomTat.xlsx');
+    });
+
+    // Export to Excel (for report)
+    document.getElementById('exportBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const startDate = toInternalDateFormat(document.getElementById('exportStartDateText').value);
+      const endDate = toInternalDateFormat(document.getElementById('exportEndDateText').value);
+      let filteredEntities = entities;
+      if (startDate && endDate) {
+        filteredEntities = entities.filter(entity => {
+          const entryDate = new Date(entity.entryDate);
+          return entryDate >= new Date(startDate) && entryDate <= new Date(endDate);
+        });
+      }
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([]);
+      const merges = [];
+
+      XLSX.utils.sheet_add_aoa(worksheet, [['CÔNG AN TP. HỒ CHÍ MINH']], {origin: 'A1'});
+      merges.push({s: {r:0, c:0}, e: {r:0, c:10}});
+
+      XLSX.utils.sheet_add_aoa(worksheet, [['CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM']], {origin: 'L1'});
+      merges.push({s: {r:0, c:11}, e: {r:0, c:20}});
+
+      XLSX.utils.sheet_add_aoa(worksheet, [['CÔNG AN PHƯỜNG TÂN BÌNH']], {origin: 'A2'});
+      merges.push({s: {r:1, c:0}, e: {r:1, c:10}});
+
+      XLSX.utils.sheet_add_aoa(worksheet, [['Độc lập - Tự do - Hạnh phúc']], {origin: 'L2'});
+      merges.push({s: {r:1, c:11}, e: {r:1, c:20}});
+
+      XLSX.utils.sheet_add_aoa(worksheet, [['PHỤ LỤC 1B']], {origin: 'A3'});
+      merges.push({s: {r:2, c:0}, e: {r:2, c:20}});
+
+      const systemType = currentSystem === 'criminal' ? 'hệ hình sự' : currentSystem === 'drug' ? 'hệ ma túy (cụ thể)' : 'hệ kinh tế, môi trường';
+      XLSX.utils.sheet_add_aoa(worksheet, [[`Thống kê kết quả rà soát, đấu tranh, xử lý đối tượng trong diện quản lý liên quan đến ${systemType}`]], {origin: 'A4'});
+      merges.push({s: {r:3, c:0}, e: {r:3, c:20}});
+
+      XLSX.utils.sheet_add_aoa(worksheet, [[`(Từ ngày ${document.getElementById('exportStartDateText').value || '01/10/2025'} đến ngày ${document.getElementById('exportEndDateText').value || '15/10/2025'})`]], {origin: 'A5'});
+      merges.push({s: {r:4, c:0}, e: {r:4, c:20}});
+
+      const dataHeaders = [
+        'STT', 'Họ và tên', 'Năm sinh', 'Giới tính', 'Hộ khẩu thường trú/ Nơi ở',
+        'Số CCCD/ Số định danh', 'Tiền án, tiền sự', 'Hành vi', 'Dấu hiệu nghi vấn',
+        'Địa bàn nghi vấn hoạt động', 'Diện quản lý', 'Đối sách, xử lý', 'Đơn vị quản lý',
+        'Số lượt gọi hỏi, răn đe', 'Thời điểm vắng mặt', 'Lĩnh vực', 'Thời điểm đưa vào',
+        'Cán bộ được phân công theo dõi', 'Chỉ huy được phân công theo dõi', 'Ghi chú'
+      ];
+      XLSX.utils.sheet_add_aoa(worksheet, [dataHeaders], {origin: 'A7'});
+
+      const dataRows = filteredEntities.map(entity => ([
+        entity.stt,
+        entity.fullName || '',
+        toDisplayDateFormat(entity.dob) || '',
+        entity.gender || '',
+        entity.address || '',
+        entity.cccd || '',
+        entity.criminalRecord || '',
+        entity.behavior || '',
+        entity.suspicion || '',
+        entity.area || '',
+        entity.managementType || '',
+        entity.measures || '',
+        entity.managementUnit || '',
+        entity.callCount || '',
+        toDisplayDateFormat(entity.absenceDate) || '',
+        entity.field || '',
+        toDisplayDateFormat(entity.entryDate) || '',
+        entity.assignedOfficer ? entity.assignedOfficer.join(', ') : '',
+        entity.supervisor || '',
+        entity.note || ''
+      ]));
+      XLSX.utils.sheet_add_aoa(worksheet, dataRows, {origin: 'A8'});
+
+      worksheet['!merges'] = merges;
+      const centerAlign = { alignment: { horizontal: 'center', wrapText: true } };
+      worksheet['A1'].s = { font: { sz: 12, bold: false }, ...centerAlign };
+      worksheet['L1'].s = { font: { sz: 13, bold: true }, ...centerAlign };
+      worksheet['A2'].s = { font: { sz: 13, bold: true }, ...centerAlign };
+      worksheet['L2'].s = { font: { sz: 14, bold: false }, ...centerAlign };
+      worksheet['A3'].s = { ...centerAlign };
+      worksheet['A4'].s = { ...centerAlign };
+      worksheet['A5'].s = { ...centerAlign };
+      worksheet['!cols'] = Array(21).fill({ wpx: 100 });
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh sách đối tượng');
+      XLSX.writeFile(workbook, 'BaoCaoDoiTuong.xlsx');
+    });
+
+    // Load entity data into form
+    async function loadEntity(index) {
+      const targetEntities = showDeleted ? deletedEntities : entities;
+      if (targetEntities[index]) {
+        const entity = targetEntities[index];
+        document.getElementById('stt').value = entity.stt;
+        document.getElementById('entryDateText').value = toDisplayDateFormat(entity.entryDate) || '';
+        document.getElementById('entryDate').value = entity.entryDate || '';
+        document.getElementById('fullName').value = entity.fullName || '';
+        document.getElementById('dobText').value = toDisplayDateFormat(entity.dob) || '';
+        document.getElementById('dob').value = entity.dob || '';
+        document.getElementById('gender').value = entity.gender || 'Nam';
+        document.getElementById('absenceDateText').value = toDisplayDateFormat(entity.absenceDate) || '';
+        document.getElementById('absenceDate').value = entity.absenceDate || '';
+        document.getElementById('occupation').value = entity.occupation || '';
+        document.getElementById('address').value = entity.address || 'Phường Tân Bình, TP. Hồ Chí Minh';
+        document.getElementById('cccd').value = entity.cccd || '';
+        document.getElementById('phone').value = entity.phone || '';
+        document.getElementById('criminalRecord').value = entity.criminalRecord || '';
+        document.getElementById('behavior').value = entity.behavior || '';
+        document.getElementById('suspicion').value = entity.suspicion || '';
+        document.getElementById('area').value = entity.area || 'Liên phường';
+        document.getElementById('managementType').value = entity.managementType || 'Tù tha';
+        document.getElementById('managementTypeCustom').value = entity.managementType || '';
+        document.getElementById('managementTypeCustom').classList.toggle('hidden', entity.managementType !== 'Khác');
+        document.getElementById('measures').value = entity.measures || 'Gọi hỏi, răn đe, cảm hóa, giáo dục';
+        document.getElementById('managementUnit').value = entity.managementUnit || lists.managementUnit[0];
+        document.getElementById('callCount').value = entity.callCount || '';
+        document.getElementById('callDate').value = toDisplayDateFormat(entity.callDate) || '';
+        document.getElementById('field').value = entity.field || '1';
+        document.getElementById('note').value = entity.note || '';
+        selectedOfficers = entity.assignedOfficer ? entity.assignedOfficer.slice(0, 2) : [];
+        document.getElementById('assignedOfficerDisplay').value = selectedOfficers.join(', ');
+        const officerSelect = document.getElementById('assignedOfficer');
+        Array.from(officerSelect.options).forEach(option => {
+          option.selected = selectedOfficers.includes(option.value);
+        });
+        document.getElementById('supervisor').value = entity.supervisor || 'Phạm Văn Trung (Phó CAP)';
+        const photoPreview = document.getElementById('photoPreview');
+        const photoText = document.getElementById('photoText');
+        if (entity.photo && entity.photo !== window.location.href) {
+          photoPreview.src = entity.photo;
+          photoPreview.classList.remove('hidden');
+          photoText.classList.add('hidden');
+        } else {
+          photoPreview.src = '';
+          photoPreview.classList.add('hidden');
+          photoText.classList.remove('hidden');
+        }
+      } else {
+        resetForm();
+      }
+    }
+
+    // Reset form
+    function resetForm() {
+      document.getElementById('entityForm').reset();
+      document.getElementById('stt').value = entities.length + 1;
+      document.getElementById('address').value = 'Phường Tân Bình, TP. Hồ Chí Minh';
+      document.getElementById('area').value = 'Liên phường';
+      document.getElementById('measures').value = 'Gọi hỏi, răn đe, cảm hóa, giáo dục';
+      document.getElementById('managementUnit').value = lists.managementUnit[0] || 'CA Phường Tân Bình';
+      document.getElementById('callDate').value = '';
+      document.getElementById('callCount').value = '';
+      document.getElementById('managementTypeCustom').classList.add('hidden');
+      document.getElementById('photoPreview').src = '';
+      document.getElementById('photoPreview').classList.add('hidden');
+      document.getElementById('photoText').classList.remove('hidden');
+      document.getElementById('photoInput').value = '';
+      ['dobText', 'absenceDateText', 'entryDateText', 'dob', 'absenceDate', 'entryDate', 'occupation', 'note'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      selectedOfficers = [];
+      document.getElementById('assignedOfficerDisplay').value = '';
+      toggleFormEditable(true);
+    }
+
+    // Handle photo upload
+    document.getElementById('photoInput').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.getElementById('photoPreview');
+          img.src = e.target.result;
+          img.classList.remove('hidden');
+          document.getElementById('photoText').classList.add('hidden');
+          if (entities[currentIndex]) {
+            entities[currentIndex].photo = e.target.result;
+            const entitiesStore = `entities${currentSystem.charAt(0).toUpperCase() + currentSystem.slice(1)}`;
+            db[entitiesStore].put(entities[currentIndex]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Export photo as JPG
+    function exportPhoto() {
+      const entity = entities[currentIndex];
+      if (!entity || !entity.photo || entity.photo === window.location.href) {
+        showNotification('Không có ảnh để xuất.');
+        return;
+      }
+
+      // Convert base64 to blob
+      const byteString = atob(entity.photo.split(',')[1]);
+      const mimeString = entity.photo.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeString });
+
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `photo_entity_${entity.stt}.jpg`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showNotification('Ảnh đã được xuất thành công!');
+    }
+
+    // Add event listener for export photo button
+    document.getElementById('exportPhotoBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      exportPhoto();
+    });
+
+    // Show/hide custom management type input
+    document.getElementById('managementType').addEventListener('change', function () {
+      const customInput = document.getElementById('managementTypeCustom');
+      customInput.classList.toggle('hidden', this.value !== 'Khác');
+      customInput.disabled = this.value !== 'Khác' || !isEditing;
+    });
+
+    // User Management Functions
+    async function login(username, password) {
+      const user = await db.users.where('username').equals(username).first();
+      if (user && user.password === password) {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('sidebar').style.display = 'block';
+        document.getElementById('mainContent').style.display = 'block';
+        showNotification('Đăng nhập thành công!');
+        localStorage.setItem('loggedInUser', username);
+        resetInactivityTimer(); // Start inactivity timer
+      } else {
+        showNotification('Tên người dùng hoặc mật khẩu không đúng.');
+      }
+    }
+
+    async function createUser(username, password, confirmPassword) {
+      const userCount = await db.users.count();
+      if (userCount > 0) {
+        showNotification('Ứng dụng chỉ cho phép tạo user một lần. Vui lòng liên hệ quản trị viên nếu cần thay đổi.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        showNotification('Mật khẩu xác nhận không khớp.');
+        return;
+      }
+      if (!username || !password) {
+        showNotification('Vui lòng nhập đầy đủ tên người dùng và mật khẩu.');
+        return;
+      }
+      const existingUser = await db.users.where('username').equals(username).first();
+      if (existingUser) {
+        showNotification('Tên người dùng đã tồn tại.');
+        return;
+      }
+      await db.users.add({ username, password });
+      showNotification('Tạo user mới thành công! Bạn có thể đăng nhập ngay.');
+      document.getElementById('createUserModal').style.display = 'none';
+      document.getElementById('createUserBtn').style.display = 'none'; // Ẩn nút sau khi tạo thành công
+    }
+
+    // Check if create user is allowed
+    async function checkCreateUserAvailability() {
+      const userCount = await db.users.count();
+      if (userCount > 0) {
+        document.getElementById('createUserBtn').style.display = 'none';
+      } else {
+        document.getElementById('createUserBtn').style.display = 'block';
+      }
+    }
+
+    // Event Listeners for Authentication
+    document.getElementById('loginBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('usernameInput').value.trim();
+      const password = document.getElementById('passwordInput').value.trim();
+      await login(username, password);
+    });
+
+    document.getElementById('createUserBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('createUserModal').style.display = 'block';
+    });
+
+    document.getElementById('createUserSubmitBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('newUsername').value.trim();
+      const password = document.getElementById('newPassword').value.trim();
+      const confirmPassword = document.getElementById('confirmNewPassword').value.trim();
+      await createUser(username, password, confirmPassword);
+    });
+
+    document.getElementById('createUserCloseBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('createUserModal').style.display = 'none';
+    });
+
+    // Optional: Auto-login if already logged in (from localStorage)
+    async function checkAutoLogin() {
+      const loggedInUser = localStorage.getItem('loggedInUser');
+      if (loggedInUser) {
+        // Verify user still exists
+        const user = await db.users.where('username').equals(loggedInUser).first();
+        if (user) {
+          document.getElementById('loginSection').style.display = 'none';
+          document.getElementById('sidebar').style.display = 'block';
+          document.getElementById('mainContent').style.display = 'block';
+          resetInactivityTimer(); // Start inactivity timer
+        } else {
+          localStorage.removeItem('loggedInUser');
+        }
+      }
+      await checkCreateUserAvailability(); // Kiểm tra và ẩn nút tạo user nếu cần
+    }
+
+    // For Change User Modal
+    document.getElementById('changeUserBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('changeUserModal').style.display = 'block';
+    });
+
+    document.getElementById('changeUserSubmitBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const oldUsername = document.getElementById('oldUsername').value.trim();
+      const oldPassword = document.getElementById('oldPassword').value.trim();
+      const newUsername = document.getElementById('newUsername').value.trim();
+      const newPassword = document.getElementById('newPassword').value.trim();
+      const confirmNewPassword = document.getElementById('confirmNewPassword').value.trim();
+
+      const user = await db.users.where('username').equals(oldUsername).first();
+      if (!user || user.password !== oldPassword) {
+        showNotification('Thông tin hiện tại không đúng.');
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        showNotification('Mật khẩu mới không khớp.');
+        return;
+      }
+      // Update user
+      await db.users.update(user.id, { username: newUsername || oldUsername, password: newPassword || oldPassword });
+      showNotification('Thay đổi user và mật khẩu thành công!');
+      document.getElementById('changeUserModal').style.display = 'none';
+      // Update localStorage if logged in
+      localStorage.setItem('loggedInUser', newUsername || oldUsername);
+    });
+
+    document.getElementById('changeUserCloseBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('changeUserModal').style.display = 'none';
+    });
+
+    // Logout function
+    function logout() {
+      localStorage.removeItem('loggedInUser');
+      document.getElementById('sidebar').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('loginSection').style.display = 'block';
+      document.getElementById('usernameInput').value = '';
+      document.getElementById('passwordInput').value = '';
+      showNotification('Đã đăng xuất.');
+    }
+
+    // Auto-logout after 30 minutes of inactivity
+    let inactivityTimeout;
+    const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+    function resetInactivityTimer() {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(() => {
+        logout();
+        showNotification('Phiên của bạn đã hết hạn do không hoạt động trong 30 phút.');
+      }, INACTIVITY_LIMIT);
+    }
+
+    // Reset timer on user activity
+    ['click', 'keydown', 'mousemove', 'scroll'].forEach(event => {
+      document.addEventListener(event, resetInactivityTimer);
+    });
+
+    // Logout button event listener
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      logout();
+      clearTimeout(inactivityTimeout); // Clear timer on manual logout
+    });
+
+    // Initial load
+    (async () => {
+      await migrateData();
+      await loadInitialData();
+      await updateSummaryTable();
+      await checkAutoLogin();
+    })();
+  </script>
+</body>
+</html>
