@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ứng dụng quản lý đối tượng</title>
-  <script src="./vendor/tailwind.min.js"></script>Viết bởi: Thanhbap
-  <script src="./vendor/xlsx.full.min.js"></script>
-  <script src="./vendor/flatpickr.min.js"></script>
-  <script src="./vendor/dexie.min.js"></script>
-  <link rel="stylesheet" href="./vendor/flatpickr.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://unpkg.com/dexie@3/dist/dexie.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <style>
     .date-picker-wrapper {
       position: relative;
@@ -853,7 +853,6 @@
             }
             await loadInitialData();
             await updateSummaryTable();
-            await checkCreateUserAvailability();
             showNotification('Phục hồi dữ liệu thành công!');
           };
           reader.readAsText(file);
@@ -1464,11 +1463,6 @@
     }
 
     async function createUser(username, password, confirmPassword) {
-      const userCount = await db.users.count();
-      if (userCount > 0) {
-        showNotification('Ứng dụng chỉ cho phép tạo user một lần. Vui lòng liên hệ quản trị viên nếu cần thay đổi.');
-        return;
-      }
       if (password !== confirmPassword) {
         showNotification('Mật khẩu xác nhận không khớp.');
         return;
@@ -1485,17 +1479,6 @@
       await db.users.add({ username, password });
       showNotification('Tạo user mới thành công! Bạn có thể đăng nhập ngay.');
       document.getElementById('createUserModal').style.display = 'none';
-      document.getElementById('createUserBtn').style.display = 'none'; // Ẩn nút sau khi tạo thành công
-    }
-
-    // Check if create user is allowed
-    async function checkCreateUserAvailability() {
-      const userCount = await db.users.count();
-      if (userCount > 0) {
-        document.getElementById('createUserBtn').style.display = 'none';
-      } else {
-        document.getElementById('createUserBtn').style.display = 'block';
-      }
     }
 
     // Event Listeners for Authentication
@@ -1539,7 +1522,6 @@
           localStorage.removeItem('loggedInUser');
         }
       }
-      await checkCreateUserAvailability(); // Kiểm tra và ẩn nút tạo user nếu cần
     }
 
     // For Change User Modal
